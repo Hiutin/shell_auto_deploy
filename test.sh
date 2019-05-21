@@ -153,6 +153,8 @@ chmod 755 $stop_shell
 send_file_to_remote "$run_shell" "run_shell" "$remote_folder"
 send_file_to_remote "$stop_shell" "stop_shell" "$remote_folder"
 
+# xterm -hold -e "echo Hello My World"
+
 # java -jar $remote_target_file $remote_config_file
 # sleep 20
 
