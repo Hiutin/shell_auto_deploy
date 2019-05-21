@@ -6,9 +6,11 @@ echo "The node address is $node_address"
 read -p "Enter the path of the target file: " target_file_path
 target_file="$target_file_path/vsys-all-*.jar"
 if [ -f $target_file ]; then
-  echo "Get the target file: " $target_file
+  echo "Fetch the target file: " $target_file
 else
   echo "Error: The target file does not exsit!"
   exit 1
 fi
-echo "go go go"
+
+folder="/Users/aaronyu/Dropbox/vsystems/test_shell"
+cp $target_file $folder
