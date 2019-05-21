@@ -127,18 +127,31 @@ echo "Rest API is through" $rest_api_address
 current_folder=$(pwd)
 run_shell="$current_folder/run.sh"
 stop_shell="$current_folder/stop.sh"
-echo "file $run_shell"
-echo "file $stop_shell"
-echo "Generate run.sh and stop.sh in" $current_folder
-remote_target_file_run=$remote_target_file
-echo "go $remote_target_file_run"
-remote_config_file_run=$remote_config_file
+echo "Generate run.sh in" $current_folder
+remote_target_file_run=$(echo $remote_target_file)
+remote_config_file_run=$(echo $remote_config_file)
 cat <<END > $run_shell
 #!/bin/bash
 
 java -jar $remote_target_file_run $remote_config_file_run
 END
 chmod 755 $run_shell
+
+command="\$(java -jar $remote_target_file_run $remote_config_file_run)"
+echo $command
+echo "Generate stop.sh in" $current_folder
+cat <<END > $stop_shell
+#!/bin/bash
+
+pid=\$(pgrep java -jar $remote_target_file_run $remote_config_file_run)
+if [ \$pid ]; then
+  kill -9 \$pid
+fi
+END
+chmod 755 $stop_shell
+
+send_file_to_remote "$run_shell" "run_shell" "$remote_folder"
+send_file_to_remote "$stop_shell" "stop_shell" "$remote_folder"
 
 # java -jar $remote_target_file $remote_config_file
 # sleep 20
