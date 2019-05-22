@@ -17,13 +17,13 @@ function get_process_pid {
   fi
 }
 
-function send_file_to_remote {
+function send_file_to_deploy {
   local local_file=$1
   local name=$2
-  local remote_folder=$3
+  local deploy_folder=$3
 
-  echo "To copy local $name file to the remote folder..."
-  cp $local_file $remote_folder
+  echo "To copy local $name file to the deploy folder..."
+  cp $local_file $deploy_folder
   echo "Done!"
 }
 
@@ -32,12 +32,12 @@ function check_folder_clean {
   local name=$2
 
   if [ ! -d $folder ]; then
-    mkdir $folder
+    mkdir "$folder/"
   fi
 
   if [ "$(ls -A $folder)" ]; then
     echo "Detect files in the $name folder. Clear all files..."
-    rm -r $folder/*
+    rm -rf $folder/*
     echo "Done!"
   fi
 }
@@ -47,7 +47,7 @@ function fetch_file {
   local name=$2
 
   if [ -f $file ]; then
-    echo "Fetch the $name file:" $file
+    echo "Fetch the $name file" $file
   else
     echo "Error: The $name file does not exsit! Exit!"
     exit 1
@@ -108,51 +108,53 @@ function height_record {
   fi
 }
 
-# /Users/aaronyu/Dropbox/vsystems/mainchain/v-systems/target
-# /Users/aaronyu/Dropbox/vsystems
-# read -p "Enter the address of a node to be connected: " node_address
-# echo "The node address is $node_address"
-# read -p "Enter the path of the target file: " target_file_path
-# read -p "Enter the path of the setting file: " config_file_path
+deploy_server="local" # local or remote
+deploy_status="stop" # stop or run
+node_address="127.0.0.1" # 18.223.113.52
+blockchain_type="testnet"
+deploy_pretest=3
+deploy_wait_check_time=5
+deploy_height_test_wait_time=5
+deploy_height_test_number=3
 
-node_address="127.0.0.1" # 54.193.47.112
-target_file_path="/Users/aaronyu/Dropbox/vsystems/mainchain/v-systems/target"
-config_file_path="/Users/aaronyu/Dropbox/vsystems"
+local_project_folder="/Users/aaronyu/Dropbox/vsystems/mainchain/v-systems"
+# local_project_folder=$(pwd)
+deploy_folder="/Users/aaronyu/Dropbox/vsystems/test_shell"
+# deploy_folder="/deploy"
+
+echo "The deploy server is $deploy_server with $deploy_pretest pretest and finally it will $deploy_status!"
+echo "The node address for deploy is $node_address"
+echo "The project folder in local machine is $local_project_folder"
+
+target_file_path="$local_project_folder/target"
 echo "The path of the target file is" $target_file_path
-echo "The path of the setting file is" $config_file_path
-
+echo "The path of the config file is" $local_project_folder
 target_file="$target_file_path/vsys-all-*.jar"
-config_file="$config_file_path/vsys-*.conf"
+config_file="$local_project_folder/vsys-*$blockchain_type.conf"
 fetch_file "$target_file" "target"
 fetch_file "$config_file" "config"
 
-remote_folder="/Users/aaronyu/Dropbox/vsystems/test_shell"
-check_folder_clean "$remote_folder" "remote"
-send_file_to_remote "$target_file" "target" "$remote_folder"
-send_file_to_remote "$config_file" "config" "$remote_folder"
+check_folder_clean "$deploy_folder" "deploy"
+send_file_to_deploy "$target_file" "target" "$deploy_folder"
+send_file_to_deploy "$config_file" "config" "$deploy_folder"
 
-
-remote_target_file="$remote_folder/*.jar"
-echo "Start the node with target file as" $remote_target_file
-remote_config_file="$remote_folder/*.conf"
-echo "Start the node with configuration file as" $remote_config_file
-
-echo "The IP of the node is" $node_address
-rest_api_address="$node_address:9922"
-echo "Rest API is through" $rest_api_address
+deploy_target_file="$deploy_folder/*.jar"
+echo "Deploy the node with target file as" $deploy_target_file
+deploy_config_file="$deploy_folder/*.conf"
+echo "Deploy the node with configuration file as" $deploy_config_file
 
 current_folder=$(pwd)
 run_shell="$current_folder/run.sh"
 stop_shell="$current_folder/stop.sh"
 
 echo "Generate run.sh in" $current_folder
-remote_target_file_run=$(echo $remote_target_file)
-remote_config_file_run=$(echo $remote_config_file)
-command_run="java -jar $remote_target_file_run $remote_config_file_run"
+deploy_target_file_run=$(echo $deploy_target_file)
+deploy_config_file_run=$(echo $deploy_config_file)
+command_run="java -jar $deploy_target_file_run $deploy_config_file_run"
 cat <<END > $run_shell
 #!/bin/bash
 
-java -jar $remote_target_file_run $remote_config_file_run
+java -jar $deploy_target_file_run $deploy_config_file_run
 END
 chmod 755 $run_shell
 
@@ -160,43 +162,52 @@ echo "Generate stop.sh in" $current_folder
 cat <<END > $stop_shell
 #!/bin/bash
 
-pid=\$(pgrep java -jar $remote_target_file_run $remote_config_file_run)
+pid=\$(pgrep java -jar $deploy_target_file_run $deploy_config_file_run)
 if [ \$pid ]; then
   kill -9 \$pid
 fi
 END
 chmod 755 $stop_shell
 
-send_file_to_remote "$run_shell" "run_shell" "$remote_folder"
-send_file_to_remote "$stop_shell" "stop_shell" "$remote_folder"
-rm ./run.sh
-rm ./stop.sh
+send_file_to_deploy "$run_shell" "run_shell" "$deploy_folder"
+send_file_to_deploy "$stop_shell" "stop_shell" "$deploy_folder"
+rm "$current_folder/run.sh"
+rm "$current_folder/stop.sh"
 
-cd $remote_folder
-nohup bash $remote_folder/run.sh  > $remote_folder/log.txt &
+rest_api_address="$node_address:9922"
+echo "Rest API is through" $rest_api_address
 
-wait_after_start=5
-echo "To check the process ID in the node $node_address (in $wait_after_start seconds)..."
-sleep $wait_after_start
-pid=$(get_process_pid "$command_run")
-if [ $pid -eq -1 ]; then
-  echo "The system is not running in $node_address. Exit!"
-  exit 1
-else
-  echo "The process ID of the system is $pid"
-fi
+cd $deploy_folder
 
-timer=5
-check_time=5
-check_node_status=0
-echo "Checking the height of the blockchain... (to check the height with $check_time times)"
-read node_status height_max change_time < <(check_height "$rest_api_address" "$timer" "$check_time")
-if [ $node_status == "Normal" ]; then
-  echo "Max height of the blockchain is: $height_max"
-  echo "The status of the blockchain is: $node_status ($change_time times with height change out of $check_time checks)"
-else
-  echo "The status of the blockchain is: $node_status"
-fi
+for (( i=1; i<=$deploy_pretest; i++))
+do
+  echo "To deploy the blockchain for the "$i"-th pretest..."
+  nohup bash $deploy_folder/run.sh  > $deploy_folder/log.txt &
+  echo "Done!"
 
-echo "Testing finished!"
-shut_down_local_pid "$pid"
+  echo "To check the process ID in the node $node_address (in $deploy_wait_check_time seconds)..."
+  sleep $deploy_wait_check_time
+  pid=$(get_process_pid "$command_run")
+  if [ $pid -eq -1 ]; then
+    echo "The system is not running in $node_address. Pretest ("$i"-th) failed!"
+  else
+    echo "The process ID of the "$i"-th pretest is $pid"
+    echo "To check the height of the blockchain for the "$i"-th pretest... (with $deploy_height_test_wait_time times)"
+    read node_status height_max change_time < <(check_height "$rest_api_address" "$deploy_height_test_wait_time" "$deploy_height_test_number")
+    if [ $node_status == "Normal" ]; then
+      echo "> Max height of the blockchain is: $height_max"
+      echo "> The status of the blockchain is: $node_status ($change_time times with height change out of $deploy_height_test_number checks)"
+    else
+      echo ">The status of the blockchain is: $node_status"
+    fi
+  fi
+
+  echo "The process ID $pid of the "$i"-th pretest is shut down!"
+  pid=$(get_process_pid "$command_run")
+  if [ $pid -gt -1 ]; then
+    kill -9 $pid
+  fi
+  echo "Done!"
+done
+
+echo "$deploy_pretest pretest(s) finished!"
