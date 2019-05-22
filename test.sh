@@ -22,7 +22,7 @@ function send_file_to_remote {
   local name=$2
   local remote_folder=$3
 
-  echo "Copy local $name file to the remote folder..."
+  echo "To copy local $name file to the remote folder..."
   cp $local_file $remote_folder
   echo "Done!"
 }
@@ -37,8 +37,7 @@ function check_folder_clean {
 
   if [ "$(ls -A $folder)" ]; then
     echo "Detect files in the $name folder. Clear all files..."
-    rm -r $folder/*.*
-    # rm -r $folder*.*
+    rm -r $folder/*
     echo "Done!"
   fi
 }
@@ -132,6 +131,7 @@ check_folder_clean "$remote_folder" "remote"
 send_file_to_remote "$target_file" "target" "$remote_folder"
 send_file_to_remote "$config_file" "config" "$remote_folder"
 
+
 remote_target_file="$remote_folder/*.jar"
 echo "Start the node with target file as" $remote_target_file
 remote_config_file="$remote_folder/*.conf"
@@ -144,11 +144,11 @@ echo "Rest API is through" $rest_api_address
 current_folder=$(pwd)
 run_shell="$current_folder/run.sh"
 stop_shell="$current_folder/stop.sh"
+
 echo "Generate run.sh in" $current_folder
 remote_target_file_run=$(echo $remote_target_file)
 remote_config_file_run=$(echo $remote_config_file)
 command_run="java -jar $remote_target_file_run $remote_config_file_run"
-echo "$command_run"
 cat <<END > $run_shell
 #!/bin/bash
 
@@ -169,35 +169,34 @@ chmod 755 $stop_shell
 
 send_file_to_remote "$run_shell" "run_shell" "$remote_folder"
 send_file_to_remote "$stop_shell" "stop_shell" "$remote_folder"
-
 rm ./run.sh
 rm ./stop.sh
-cd $remote_folder
-# nohup bash $remote_folder/run.sh  > $remote_folder/log.txt &
-bash $remote_folder/run.sh
 
-# wait_after_start=5
-# echo "To check the process ID in the node $node_address (in $wait_after_start seconds)..."
-# sleep $wait_after_start
-# pid=$(get_process_pid "$command_run")
-# if [ $pid -eq -1 ]; then
-#   echo "The system is not running in $node_address. Exit!"
-#   exit 1
-# else
-#   echo "The process ID of the system is $pid"
-# fi
-#
-# timer=5
-# check_time=2
-# check_node_status=0
-# echo "Checking the height of the blockchain... (to check the height with $check_time times)"
-# read node_status height_max change_time < <(check_height "$rest_api_address" "$timer" "$check_time")
-# if [ $node_status == "Normal" ]; then
-#   echo "Max height of the blockchain is: $height_max"
-#   echo "The status of the blockchain is: $node_status ($change_time times with height change out of $check_time checks)"
-# else
-#   echo "The status of the blockchain is: $node_status"
-# fi
-#
-# echo "Testing finished!"
-# shut_down_local_pid "$pid"
+cd $remote_folder
+nohup bash $remote_folder/run.sh  > $remote_folder/log.txt &
+
+wait_after_start=5
+echo "To check the process ID in the node $node_address (in $wait_after_start seconds)..."
+sleep $wait_after_start
+pid=$(get_process_pid "$command_run")
+if [ $pid -eq -1 ]; then
+  echo "The system is not running in $node_address. Exit!"
+  exit 1
+else
+  echo "The process ID of the system is $pid"
+fi
+
+timer=5
+check_time=5
+check_node_status=0
+echo "Checking the height of the blockchain... (to check the height with $check_time times)"
+read node_status height_max change_time < <(check_height "$rest_api_address" "$timer" "$check_time")
+if [ $node_status == "Normal" ]; then
+  echo "Max height of the blockchain is: $height_max"
+  echo "The status of the blockchain is: $node_status ($change_time times with height change out of $check_time checks)"
+else
+  echo "The status of the blockchain is: $node_status"
+fi
+
+echo "Testing finished!"
+shut_down_local_pid "$pid"
