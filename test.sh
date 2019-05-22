@@ -1,5 +1,22 @@
 #!/bin/bash
 
+function shut_down_local_pid {
+  local pid=$1
+  echo "The process ID $pid is shutting down!"
+  kill -9 $pid
+  echo "Done!"
+}
+
+function get_process_pid {
+  local command=$1
+  pid=$(pgrep $command)
+  if [ $pid ]; then
+    echo $pid
+  else
+    echo -1
+  fi
+}
+
 function send_file_to_remote {
   local local_file=$1
   local name=$2
@@ -61,7 +78,7 @@ function check_height {
   local check_time=$3
 
   local result=$(curl -X GET --header 'Accept: application/json' -s "$rest_api/blocks/height")
-  local height=$(json_extract height "$result")
+  local height=$(json_extract "height" "$result")
   local height_max=$height
   local change_time=0
 
@@ -69,7 +86,7 @@ function check_height {
   do
     sleep $timer
     result=$(curl -X GET --header 'Accept: application/json' -s "$rest_api/blocks/height")
-    height=$(json_extract height "$result")
+    height=$(json_extract "height" "$result")
     read height_max change_time < <(height_record "$height_max" "$height" "$change_time")
   done
 
@@ -130,6 +147,8 @@ stop_shell="$current_folder/stop.sh"
 echo "Generate run.sh in" $current_folder
 remote_target_file_run=$(echo $remote_target_file)
 remote_config_file_run=$(echo $remote_config_file)
+command_run="java -jar $remote_target_file_run $remote_config_file_run"
+echo "$command_run"
 cat <<END > $run_shell
 #!/bin/bash
 
@@ -137,8 +156,6 @@ java -jar $remote_target_file_run $remote_config_file_run
 END
 chmod 755 $run_shell
 
-command="\$(java -jar $remote_target_file_run $remote_config_file_run)"
-echo $command
 echo "Generate stop.sh in" $current_folder
 cat <<END > $stop_shell
 #!/bin/bash
@@ -153,17 +170,34 @@ chmod 755 $stop_shell
 send_file_to_remote "$run_shell" "run_shell" "$remote_folder"
 send_file_to_remote "$stop_shell" "stop_shell" "$remote_folder"
 
-# xterm -hold -e "echo Hello My World"
+rm ./run.sh
+rm ./stop.sh
+cd $remote_folder
+# nohup bash $remote_folder/run.sh  > $remote_folder/log.txt &
+bash $remote_folder/run.sh
 
-# java -jar $remote_target_file $remote_config_file
-# sleep 20
-
+# wait_after_start=5
+# echo "To check the process ID in the node $node_address (in $wait_after_start seconds)..."
+# sleep $wait_after_start
+# pid=$(get_process_pid "$command_run")
+# if [ $pid -eq -1 ]; then
+#   echo "The system is not running in $node_address. Exit!"
+#   exit 1
+# else
+#   echo "The process ID of the system is $pid"
+# fi
+#
 # timer=5
 # check_time=2
 # check_node_status=0
 # echo "Checking the height of the blockchain... (to check the height with $check_time times)"
 # read node_status height_max change_time < <(check_height "$rest_api_address" "$timer" "$check_time")
-# echo "Max height of the blockchain is: $height_max"
-# echo "The status of the blockchain is: $node_status ($change_time times with height change out of $check_time checks)"
-
-# java -jar $remote_target_file $remote_config_file
+# if [ $node_status == "Normal" ]; then
+#   echo "Max height of the blockchain is: $height_max"
+#   echo "The status of the blockchain is: $node_status ($change_time times with height change out of $check_time checks)"
+# else
+#   echo "The status of the blockchain is: $node_status"
+# fi
+#
+# echo "Testing finished!"
+# shut_down_local_pid "$pid"
