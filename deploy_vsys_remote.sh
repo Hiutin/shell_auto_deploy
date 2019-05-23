@@ -1,7 +1,8 @@
 #!/bin/bash
 
-deploy_pretest=0
+deploy_pretest=2
 deploy_type="testnet"
+deploy_file_update="no" # yes: bash will send files from local to server
 deploy_status="run" # stop or run
 node_address="18.223.113.52" # 18.223.113.52
 node_pem="vsysDeployTest.pem"
@@ -75,6 +76,13 @@ function deploy_vsys_to_server {
   fi
 
   cd ssd/v-systems-main/
+
+  number_files=\$(ls -A | wc -l)
+  shopt -s extglob
+  if [ \$number_files -gt 2 ]; then
+    rm -r !(*.jar|*.conf)
+  fi
+
   nohup java -jar \$target_file \$config_file > ./$log_file &
   echo \" > Done!\"
   "
@@ -111,29 +119,6 @@ function kill_old_process_by_port {
   done
   "
   echo " > All port checked! Kill done!"
-}
-
-function check_process_by_port {
-  local key=$1
-  local server=$2
-  local port=$3
-
-  ssh -i "$key" "$server" "
-  #!/bin/bash
-  pid_str=\$(sudo netstat -ltnp | grep -w \":\$$port\"| awk '{print \$7}')
-  if [ -z \$pid_str ]; then
-    echo \"1: -1\"
-  fi
-  if [ ! -z \$pid_str ]; then
-      IFS='/' read -r -a temp_array <<< \$pid_str
-      pid=\$temp_array
-      if [ ! -z \$pid ]; then
-        echo \"2 \$pid\"
-      else
-        echo \"3 -1\"
-      fi
-  fi
-  "
 }
 
 function check_update_server_JRE {
@@ -280,8 +265,10 @@ chmod 700 "$local_pem_folder/$node_pem"
 # mount_server "$local_pem_folder/$node_pem" "$server_name@$node_address" \
 # "$server_name" "$server_disk_dir" "$server_disk_device" "$server_disk_entry"
 
-# check_server_folder_clean "$local_pem_folder/$node_pem" \
-# "$server_name@$node_address" "$server_project_dir"
+if [ "$deploy_file_update" == "yes" ]; then
+  check_server_folder_clean "$local_pem_folder/$node_pem" \
+  "$server_name@$node_address" "$server_project_dir"
+fi
 
 target_file_path="$local_project_folder/target"
 target_file="$target_file_path/vsys-all-*.jar"
@@ -295,13 +282,15 @@ echo "The deploy server is $node_address with $deploy_pretest pretest and finall
 echo " > The node address for deploy is $node_address"
 echo " > The project folder in local machine is $local_project_folder"
 
-# send_file_to_server "$local_pem_folder/$node_pem" "$server_name@$node_address" \
-# "$(echo $target_file)" "$server_project_dir" "target"
-# send_file_to_server "$local_pem_folder/$node_pem" "$server_name@$node_address" \
-# "$(echo $config_file)" "$server_project_dir" "config"
+if [ "$deploy_file_update" == "yes" ]; then
+  send_file_to_server "$local_pem_folder/$node_pem" "$server_name@$node_address" \
+  "$(echo $target_file)" "$server_project_dir" "target"
+  send_file_to_server "$local_pem_folder/$node_pem" "$server_name@$node_address" \
+  "$(echo $config_file)" "$server_project_dir" "config"
+fi
 
-# check_update_server_JRE "$local_pem_folder/$node_pem" \
-# "$server_name@$node_address" "$java_version_old" "$java_version_new"
+check_update_server_JRE "$local_pem_folder/$node_pem" \
+"$server_name@$node_address" "$java_version_old" "$java_version_new"
 
 echo "======================= start $deploy_pretest pretests of deploy ======================="
 echo "The following conducts $deploy_pretest pretests of deploy (deploy->shutdown for $deploy_pretest times)"
