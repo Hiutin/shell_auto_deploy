@@ -1,9 +1,9 @@
 #!/bin/bash
 
-deploy_pretest=2
+deploy_pretest=1
 deploy_type="testnet"
-deploy_file_update="yes" # yes: bash will send files from local to server
-deploy_status="run" # stop or run
+deploy_file_update="no" # yes: bash will send files from local to server
+deploy_status="stop" # stop or run
 node_address="18.223.113.52" # 18.223.113.52
 node_pem="vsysDeployTest.pem"
 local_pem_folder="/Users/aaronyu/Dropbox/vsystems/pem"
@@ -14,7 +14,7 @@ java_version_new="1.9"
 
 server_name="ubuntu"
 server_disk_dir="/home/$server_name/ssd"
-server_disk_device="/dev/nvme0n1"
+server_disk_device="/dev"
 server_disk_entry="$server_disk_device    $server_disk_dir ext4    defaults    0 0"
 server_project_dir="/home/$server_name/ssd/v-systems-main"
 server_log_file="node.log"
@@ -30,18 +30,21 @@ function mount_server {
   local server=$2
   local server_name=$3
   local disk_dir=$4
-  local disk_device=$5
+  local disk_dev=$5
   local entry=$6
 
   ssh -i "$key" "$server" "
   #!/bin/bash
   mkdir -p $disk_dir
+  device_name=\$(lsblk --sort SIZE | tail -1 | awk '{print \$1}')
+  disk_device=\"$disk_dev/\$device_name\"
+  
   if mountpoint -q \"$disk_dir\"; then
     echo \"Disk has already mounted\"
   else
     echo \"To mount the disk of server (\"$server\")\"
-    sudo mkfs.ext4 $disk_device
-    sudo mount $disk_device $disk_dir
+    sudo mkfs.ext4 \$disk_device
+    sudo mount \$disk_device $disk_dir
     sudo chown $server_name:$server_name $disk_dir
     echo $entry | sudo tee -a /etc/fstab
   fi
@@ -262,8 +265,8 @@ echo "======================= prepare to deploy in server $node_address ========
 fetch_local_file "$local_pem_folder/$node_pem" "pem"
 chmod 700 "$local_pem_folder/$node_pem"
 
-# mount_server "$local_pem_folder/$node_pem" "$server_name@$node_address" \
-# "$server_name" "$server_disk_dir" "$server_disk_device" "$server_disk_entry"
+mount_server "$local_pem_folder/$node_pem" "$server_name@$node_address" \
+"$server_name" "$server_disk_dir" "$server_disk_device" "$server_disk_entry"
 
 if [ "$deploy_file_update" == "yes" ]; then
   check_server_folder_clean "$local_pem_folder/$node_pem" \
