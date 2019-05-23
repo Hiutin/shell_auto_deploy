@@ -2,7 +2,7 @@
 
 deploy_pretest=2
 deploy_type="testnet"
-deploy_file_update="no" # yes: bash will send files from local to server
+deploy_file_update="yes" # yes: bash will send files from local to server
 deploy_status="run" # stop or run
 node_address="18.223.113.52" # 18.223.113.52
 node_pem="vsysDeployTest.pem"
