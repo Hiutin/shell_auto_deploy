@@ -2,8 +2,8 @@
 
 deploy_pretest=1
 deploy_type="testnet"
-deploy_file_update="no" # yes: bash will send files from local to server
-deploy_status="stop" # stop or run
+deploy_file_update="yes" # yes: bash will send files from local to server
+deploy_status="run" # stop or run
 node_address="18.223.113.52" # 18.223.113.52
 node_pem="vsysDeployTest.pem"
 local_pem_folder="/Users/aaronyu/Dropbox/vsystems/pem"
@@ -38,7 +38,7 @@ function mount_server {
   mkdir -p $disk_dir
   device_name=\$(lsblk --sort SIZE | tail -1 | awk '{print \$1}')
   disk_device=\"$disk_dev/\$device_name\"
-  
+
   if mountpoint -q \"$disk_dir\"; then
     echo \"Disk has already mounted\"
   else
