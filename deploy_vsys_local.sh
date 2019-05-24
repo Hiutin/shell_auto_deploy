@@ -1,5 +1,18 @@
 #!/bin/bash
 
+deploy_server="local" # local or remote
+deploy_status="run" # stop or run
+node_address="127.0.0.1"
+blockchain_type="testnet"
+local_project_folder="/Users/aaronyu/Dropbox/vsystems/mainchain/v-systems"
+# local_project_folder=$(pwd)
+deploy_folder="/Users/aaronyu/Dropbox/vsystems/test_shell"
+
+deploy_pretest=1
+deploy_wait_check_time=5
+deploy_height_test_wait_time=5
+deploy_height_test_number=3
+
 function shut_down_local_pid {
   local pid=$1
   echo "The process ID $pid is shutting down!"
@@ -49,7 +62,7 @@ function fetch_file {
   if [ -f $file ]; then
     echo "Fetch the $name file" $file
   else
-    echo "Error: The $name file does not exsit! Exit!"
+    echo "Error: The $name file does not exist! Exit!"
     exit 1
   fi
 }
@@ -107,27 +120,6 @@ function height_record {
     echo $height_current $(( $change_time + 1 ))
   fi
 }
-
-# deploy_server="local" # local or remote
-# deploy_status="stop" # stop or run
-# node_address="127.0.0.1" # 18.223.113.52 127.0.0.1
-# node_pem=""
-
-deploy_server="remote" # local or remote
-deploy_status="stop" # stop or run
-node_address="18.223.113.52" # 18.223.113.52 127.0.0.1
-node_pem="vsysDeployTest.pem"
-
-blockchain_type="testnet"
-deploy_pretest=3
-deploy_wait_check_time=5
-deploy_height_test_wait_time=5
-deploy_height_test_number=3
-
-local_project_folder="/Users/aaronyu/Dropbox/vsystems/mainchain/v-systems"
-# local_project_folder=$(pwd)
-# deploy_folder="/Users/aaronyu/Dropbox/vsystems/test_shell"
-deploy_folder="/ssd/v-systems-main"
 
 echo "The deploy server is $deploy_server with $deploy_pretest pretest and finally it will $deploy_status!"
 echo "The node address for deploy is $node_address"
@@ -187,6 +179,7 @@ echo "Rest API is through" $rest_api_address
 cd $deploy_folder
 
 normal_status_time=0
+node_status=""
 for (( i=1; i<=$deploy_pretest; i++))
 do
   echo "To deploy the blockchain for the "$i"-th pretest..."
@@ -200,7 +193,7 @@ do
     echo "The system is not running in $node_address. Pretest ("$i"-th) failed!"
   else
     echo "The process ID of the "$i"-th pretest is $pid"
-    echo "To check the height of the blockchain for the "$i"-th pretest... (with $deploy_height_test_wait_time times)"
+    echo "To check the height of the blockchain for the "$i"-th pretest... (with $deploy_height_test_wait_time seconds of waiting for block generation)"
     read node_status height_max change_time < <(check_height "$rest_api_address" "$deploy_height_test_wait_time" "$deploy_height_test_number")
     if [ $node_status == "Normal" ]; then
       echo "> Max height of the blockchain is: $height_max"
@@ -210,7 +203,7 @@ do
     fi
   fi
 
-  if [ $node_status == "Normal" ]; then
+  if [ "$node_status" == "Normal" ]; then
     normal_status_time=$(( normal_status_time + 1 ))
   fi
 
