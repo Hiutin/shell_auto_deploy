@@ -2,7 +2,7 @@
 
 deploy_type="testnet"
 deploy_file_update="no" # yes: bash will send files from local to server
-deploy_status="run" # stop or run
+deploy_status="stop" # stop or run
 node_address="18.223.113.52" # 18.223.113.52
 node_pem="vsysDeployTest.pem"
 local_pem_folder="/Users/aaronyu/Dropbox/vsystems/pem"
@@ -275,7 +275,7 @@ kill_old_process_by_port "$local_pem_folder/$node_pem" \
 deploy_vsys_to_server "$local_pem_folder/$node_pem" \
 "$server_name@$node_address" "$server_project_dir" "$server_log_file"
 
-echo "To test the HEIGHT of blockchain in $node_address"
+echo "To test the height of the blockchain in $node_address"
 rest_api_address="$node_address:$rest_api_port"
 echo " > Rest API is through" $rest_api_address
 
@@ -308,8 +308,8 @@ else
 fi
 
 if [ "$node_status" == "Normal" ]; then
-  echo " > Max height of the blockchain is: $height_max"
-  echo "The status of the blockchain is: $node_status ($(( change_time - 1 )) times with height change out of $deploy_height_test_number checks)"
+  echo " > Current max height of the blockchain in check is: $height_max"
+  echo "The status of the blockchain is: $node_status ($(( change_time - 1 )) time(s) with height change out of $deploy_height_test_number checks)"
   if [ $deploy_status == "stop" ]; then
     kill_old_process_by_port "$local_pem_folder/$node_pem" \
     "$server_name@$node_address" "$communication_port"
@@ -320,7 +320,7 @@ if [ "$node_status" == "Normal" ]; then
     echo "=============================================="
   fi
 else
-  echo " > Max height of the blockchain is: $height_max"
+  echo " > Current max height of the blockchain in check is: $height_max"
   echo "The status of the blockchain is: $node_status"
   echo "Fail to deploy! Bash file finished!"
   echo "=============================================="
