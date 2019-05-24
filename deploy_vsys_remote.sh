@@ -1,8 +1,7 @@
 #!/bin/bash
 
-deploy_pretest=1
 deploy_type="testnet"
-deploy_file_update="yes" # yes: bash will send files from local to server
+deploy_file_update="no" # yes: bash will send files from local to server
 deploy_status="run" # stop or run
 node_address="18.223.113.52" # 18.223.113.52
 node_pem="vsysDeployTest.pem"
@@ -19,11 +18,11 @@ server_disk_entry="$server_disk_device    $server_disk_dir ext4    defaults    0
 server_project_dir="/home/$server_name/ssd/v-systems-main"
 server_log_file="node.log"
 
-communication_port="9922 9923 9921"
-rest_api_port="9922"
-deploy_wait_check_time=15
-deploy_height_test_wait_time=5
+communication_port="9922 9923 9921 9928"
+rest_api_port="9928"
+deploy_height_test_wait_time=15
 deploy_height_test_number=3
+deploy_wait_check_time=15
 
 function mount_server {
   local key=$1
@@ -31,13 +30,13 @@ function mount_server {
   local server_name=$3
   local disk_dir=$4
   local disk_dev=$5
-  local entry=$6
 
   ssh -i "$key" "$server" "
   #!/bin/bash
   mkdir -p $disk_dir
   device_name=\$(lsblk --sort SIZE | tail -1 | awk '{print \$1}')
   disk_device=\"$disk_dev/\$device_name\"
+  entry=\"\$disk_device\"\$(echo \$'\t')\"$disk_dir\"\$(echo \$'\t')\"ext4\"\$(echo \$'\t')\"defaults\"\$(echo \$'\t')\"0 0\"
 
   if mountpoint -q \"$disk_dir\"; then
     echo \"Disk has already mounted\"
@@ -46,7 +45,7 @@ function mount_server {
     sudo mkfs.ext4 \$disk_device
     sudo mount \$disk_device $disk_dir
     sudo chown $server_name:$server_name $disk_dir
-    echo $entry | sudo tee -a /etc/fstab
+    echo \$entry | sudo tee -a /etc/fstab
   fi
   "
 }
@@ -56,8 +55,6 @@ function deploy_vsys_to_server {
   local server=$2
   local dir=$3
   local log_file=$4
-
-  local wait_time=10
 
   echo "To deploy vsys in $server; Start..."
   ssh -i "$key" "$server" "
@@ -87,7 +84,7 @@ function deploy_vsys_to_server {
   fi
 
   nohup java -jar \$target_file \$config_file > ./$log_file &
-  echo \" > Done!\"
+  echo \" > Deploy command has been run!\"
   "
 }
 
@@ -223,32 +220,7 @@ function json_extract {
   fi
 }
 
-function check_height {
-  local rest_api=$1
-  local timer=$2
-  local check_time=$3
-
-  local result=$(curl -X GET --header 'Accept: application/json' -s "$rest_api/blocks/height")
-  local height=$(json_extract "height" "$result")
-  local height_max=$height
-  local change_time=0
-
-  for (( i=1; i<=$check_time; i++))
-  do
-    sleep $timer
-    result=$(curl -X GET --header 'Accept: application/json' -s "$rest_api/blocks/height")
-    height=$(json_extract "height" "$result")
-    read height_max change_time < <(height_record "$height_max" "$height" "$change_time")
-  done
-
-  if [ $change_time -gt 0 ]; then
-    echo "Normal" $height_max $change_time
-  else
-    echo "Abnormal" $height_max $change_time
-  fi
-}
-
-function height_record {
+function height_comparison {
   local height_max=$1
   local height_current=$2
   local change_time=$3
@@ -263,10 +235,10 @@ function height_record {
 echo "======================= prepare to deploy in server $node_address ======================="
 
 fetch_local_file "$local_pem_folder/$node_pem" "pem"
-chmod 700 "$local_pem_folder/$node_pem"
+chmod 400 "$local_pem_folder/$node_pem"
 
 mount_server "$local_pem_folder/$node_pem" "$server_name@$node_address" \
-"$server_name" "$server_disk_dir" "$server_disk_device" "$server_disk_entry"
+"$server_name" "$server_disk_dir" "$server_disk_device"
 
 if [ "$deploy_file_update" == "yes" ]; then
   check_server_folder_clean "$local_pem_folder/$node_pem" \
@@ -281,7 +253,7 @@ echo "The path of the config file is" $local_project_folder
 fetch_local_file "$target_file" "target"
 fetch_local_file "$config_file" "config"
 
-echo "The deploy server is $node_address with $deploy_pretest pretest and finally it will $deploy_status!"
+echo "The deploy server is $node_address and finally it will $deploy_status!"
 echo " > The node address for deploy is $node_address"
 echo " > The project folder in local machine is $local_project_folder"
 
@@ -295,92 +267,61 @@ fi
 check_update_server_JRE "$local_pem_folder/$node_pem" \
 "$server_name@$node_address" "$java_version_old" "$java_version_new"
 
-echo "======================= start $deploy_pretest pretests of deploy ======================="
-echo "The following conducts $deploy_pretest pretests of deploy (deploy->shutdown for $deploy_pretest times)"
+echo "======================= start to deploy with height check $deploy_height_test_number times ======================="
 
-normal_status_time=0
-for (( i=1; i<=$deploy_pretest; i++))
+kill_old_process_by_port "$local_pem_folder/$node_pem" \
+"$server_name@$node_address" "$communication_port"
+
+deploy_vsys_to_server "$local_pem_folder/$node_pem" \
+"$server_name@$node_address" "$server_project_dir" "$server_log_file"
+
+echo "To test the HEIGHT of blockchain in $node_address"
+rest_api_address="$node_address:$rest_api_port"
+echo " > Rest API is through" $rest_api_address
+
+sleep $deploy_wait_check_time
+
+height_max=0
+change_time=0
+height=0
+for (( i=1; i<=$deploy_height_test_number; i++))
 do
-  echo "<To conduct the "$i"-th pretest>"
-  node_status=""
 
-  kill_old_process_by_port "$local_pem_folder/$node_pem" \
-  "$server_name@$node_address" "$communication_port"
-
-  deploy_vsys_to_server "$local_pem_folder/$node_pem" \
-  "$server_name@$node_address" "$server_project_dir" "$server_log_file"
-
-  sleep $deploy_wait_check_time
-
-  height_change_test_flag=0
-  echo "To test the HEIGHT of blockchain in $node_address"
-  rest_api_address="$node_address:$rest_api_port"
-  echo " > Rest API is through" $rest_api_address
   result=$(curl -X GET --header 'Accept: application/json' -s "$rest_api_address/blocks/height")
   height=$(json_extract "height" "$result")
 
   if [ ! -z "$height" ]; then
-    if [ $height -ge 1 ]; then
-      echo " > The height of the blockchain is $height"
-      height_change_test_flag=1
-    else
-      echo " > Something wrong for the blockchain with the height as $height"
-    fi
+    echo " > The height for the blockchain in the $i-th check is: $height"
+    read height_max change_time < <(height_comparison "$height_max" "$height" "$change_time")
   else
-    echo " > Something wrong for the blockchain in $node_address as the height is empty"
+    echo " > The height for the blockchain in the \"$i\"-th check is: empty"
   fi
 
-  if [ $height_change_test_flag -eq 1 ]; then
-    echo "To test the HEIGHT CHANGE of blockchain in $node_address for the "$i"-th pretest (with $deploy_height_test_wait_time seconds waiting for block generation)"
-    read node_status height_max change_time < <(check_height "$rest_api_address" "$deploy_height_test_wait_time" "$deploy_height_test_number")
-    if [ "$node_status" == "Normal" ]; then
-      echo " > Max height of the blockchain is: $height_max"
-      echo " > The status of the blockchain is: $node_status ($change_time times with height change out of $deploy_height_test_number checks)"
-    else
-      echo " > The status of the blockchain is: $node_status"
-    fi
-  fi
+  sleep $deploy_height_test_wait_time
 
-  if [ "$node_status" == "Normal" ]; then
-    normal_status_time=$(( normal_status_time + 1 ))
-  fi
-
-  kill_old_process_by_port "$local_pem_folder/$node_pem" \
-  "$server_name@$node_address" "$communication_port"
 done
 
-echo "Statistics: $deploy_pretest pretest(s) finished! $normal_status_time pretests(s) Normal!"
-
-if [ "$normal_status_time" -ne "$deploy_pretest" ]; then
-  echo "Pretest does NOT pass! Exit!"
-  exit
+if [ $change_time -gt 1 ]; then
+  node_status="Normal"
+else
+  node_status="Abnormal"
 fi
 
-if [ "$normal_status_time" -eq "$deploy_pretest" ] && [ $deploy_status == "stop" ]; then
-  echo "Pretest passed without deploy! Bash file finished!"
-  echo "=============================================="
-fi
-
-if [ "$normal_status_time" -eq "$deploy_pretest" ] && [ $deploy_status == "run" ]; then
-  echo "======================= deploy vsys after $deploy_pretest pretest ======================="
-  if [ $deploy_status == "run" ]; then
+if [ "$node_status" == "Normal" ]; then
+  echo " > Max height of the blockchain is: $height_max"
+  echo "The status of the blockchain is: $node_status ($(( change_time - 1 )) times with height change out of $deploy_height_test_number checks)"
+  if [ $deploy_status == "stop" ]; then
     kill_old_process_by_port "$local_pem_folder/$node_pem" \
     "$server_name@$node_address" "$communication_port"
-
-    deploy_vsys_to_server "$local_pem_folder/$node_pem" \
-    "$server_name@$node_address" "$server_project_dir" "$server_log_file"
-
-    sleep $deploy_wait_check_time
-
-    height_change_test_flag=0
-    echo "To test the HEIGHT of blockchain in $node_address"
-    rest_api_address="$node_address:$rest_api_port"
-    echo " > Rest API is through" $rest_api_address
-    result=$(curl -X GET --header 'Accept: application/json' -s "$rest_api_address/blocks/height")
-    height=$(json_extract "height" "$result")
-    echo " > The height of the deploy blockchain in $node_address is $height"
+    echo "Successful to deploy and stop the blockchain! Bash file finished!"
+    echo "=============================================="
+  else
+    echo "Successful to deploy! Bash file finished!"
+    echo "=============================================="
   fi
-  echo " > Deploy! Done!"
-  echo "Pretest passed ($deploy_pretest times) with successful deploy! Bash file finished!"
+else
+  echo " > Max height of the blockchain is: $height_max"
+  echo "The status of the blockchain is: $node_status"
+  echo "Fail to deploy! Bash file finished!"
   echo "=============================================="
 fi
