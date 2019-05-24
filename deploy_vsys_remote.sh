@@ -14,7 +14,6 @@ java_version_new="1.9"
 server_name="ubuntu"
 server_disk_dir="/home/$server_name/ssd"
 server_disk_device="/dev"
-server_disk_entry="$server_disk_device    $server_disk_dir ext4    defaults    0 0"
 server_project_dir="/home/$server_name/ssd/v-systems-main"
 server_log_file="node.log"
 
@@ -36,7 +35,7 @@ function mount_server {
   mkdir -p $disk_dir
   device_name=\$(lsblk --sort SIZE | tail -1 | awk '{print \$1}')
   disk_device=\"$disk_dev/\$device_name\"
-  entry=\"\$disk_device\"\$(echo \$'\t')\"$disk_dir\"\$(echo \$'\t')\"ext4\"\$(echo \$'\t')\"defaults\"\$(echo \$'\t')\"0 0\"
+  entry=\"\$disk_device\t$disk_dir\text4\tdefaults\t0 0\"
 
   if mountpoint -q \"$disk_dir\"; then
     echo \"Disk has already mounted\"
@@ -45,7 +44,7 @@ function mount_server {
     sudo mkfs.ext4 \$disk_device
     sudo mount \$disk_device $disk_dir
     sudo chown $server_name:$server_name $disk_dir
-    echo \$entry | sudo tee -a /etc/fstab
+    echo -e \$entry | sudo tee -a /etc/fstab
   fi
   "
 }
